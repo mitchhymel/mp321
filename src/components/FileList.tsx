@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import AudioWavePlayer from './AudioWavePlayer';
 
 interface FileListProps {
   files: File[],
@@ -10,11 +11,9 @@ function FileList(props: FileListProps) {
 
   return (
     <div>
-      {files.length > 0 && files.map(file => 
-        <div key={file.name}>
-          <p>{file.name}</p>
-          <audio src={URL.createObjectURL(file)} controls/>
-          <button onClick={() => onRemoveFile(file)}>Remove this file</button>
+      {files.length > 0 && files.map((file, index) => 
+        <div key={file.name} style={{paddingTop: '5px'}}>
+          <AudioWavePlayer file={file} index={index} onRemoveFile={() => onRemoveFile(file)} />
         </div>
       )}
     </div>

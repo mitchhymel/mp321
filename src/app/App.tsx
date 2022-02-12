@@ -3,6 +3,7 @@ import { createFFmpeg, fetchFile, FFmpeg } from '@ffmpeg/ffmpeg';
 import styled from 'styled-components';
 
 import FileList from '../components/FileList';
+import AudioWavePlayer from '../components/AudioWavePlayer';
 
 const StyledApp = styled.div`
   text-align: center;
@@ -40,6 +41,7 @@ function App() {
 
   const [audioSrc, setAudioSrc] = useState('');
   const [videoSrc, setVideoSrc] = useState('');
+  const [combinedFile, setCombinedFile] = useState<File | null>(null);
 
   const [progress, setProgress] = useState<Progress | null>(null);
   const [showProgress, setShowProgress] = useState(false);
@@ -117,8 +119,20 @@ function App() {
     setShowProgress(true);
     await combineFilesIntoOneMp3();
     const data = ffmpeg.FS('readFile', outputFileName);
-    setAudioSrc(URL.createObjectURL(new Blob([data.buffer], { type: 'audio/mp3' })));
+    const blob = new Blob([data.buffer], { type: 'audio/mp3' });
+    const file = new File([blob], 'combined.mp3');
+    //setAudioSrc(URL.createObjectURL(file));
+    setCombinedFile(file);
+
     setShowProgress(false);
+  }
+
+  const onDownloadClick = async (file: File) => {
+    var url = URL.createObjectURL(file);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = file.name;
+    link.click();
   }
 
   const onCombineIntoVideoClick = async () => {
@@ -177,12 +191,7 @@ function App() {
       <button disabled={files.length < 2 || showProgress} onClick={onCombineClick}>Combine into one mp3</button>
       
       <br/>
-      {audioSrc && 
-        <div>
-          <p>Combined</p>
-          <audio src={audioSrc} controls></audio>
-        </div>
-      }
+      {combinedFile && <AudioWavePlayer file={combinedFile!} index={-1} onDownloadFile={onDownloadClick}/>}
       <br/>
 
       <br/>
