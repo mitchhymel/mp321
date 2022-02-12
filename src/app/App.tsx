@@ -1,17 +1,36 @@
-import React, { useRef, useState } from 'react';
-import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
-import logo from './logo.svg';
-import './App.css';
+import React, { useEffect, useRef, useState } from 'react';
+import { createFFmpeg, fetchFile, FFmpeg } from '@ffmpeg/ffmpeg';
+import styled from 'styled-components';
+
+import FileList from '../components/FileList';
+
+const StyledApp = styled.div`
+  text-align: center;
+`;
+
+const StyledCode = styled.div`
+  white-space:  nowrap;
+  background-color: #d7d7d7;
+  overflow: auto;
+  width: 100%;
+  height: 500;
+  text-align: left;
+`;
 
 
-const ffmpeg = createFFmpeg({
-  log: true,
-  corePath: "https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js"
-});
+var ffmpeg:FFmpeg;
+
+interface Progress {
+  ratio: number;
+}
+
+interface Log {
+  date: Date;
+  type: string;
+  message: string;
+}
 
 function App() {
-
-  const [message, setMessage] = useState('Progress will show here');
 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -22,6 +41,26 @@ function App() {
   const [audioSrc, setAudioSrc] = useState('');
   const [videoSrc, setVideoSrc] = useState('');
 
+  const [progress, setProgress] = useState<Progress | null>(null);
+  const [showProgress, setShowProgress] = useState(false);
+
+  const [logs, setLogs] = useState<Log[]>([]);
+
+  useEffect(() => {
+    ffmpeg = createFFmpeg({
+      log: true,
+      corePath: "https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js",
+      progress: (p) => setProgress(p),
+      logger: (l) => {
+        logs.unshift({
+          date: new Date(),
+          message: l.message,
+          type: l.type
+        });
+        setLogs(logs);
+      }
+    });
+  }, [])
 
   const onAddFileClick = () => {
     if (fileRef.current !== null) {
@@ -53,22 +92,18 @@ function App() {
   }
 
   const outputFileName = 'combined.mp3';
-  const outputListTextName = 'combined.txt';
 
   const combineFilesIntoOneMp3 = async () => {
-    setMessage('Loading ffmpeg-core.js');
+
     if (!ffmpeg.isLoaded()) {
       await ffmpeg.load();
     }
-    setMessage('Starting combinining mp3s into one...');
 
 
-    var commandstr = '';
     var inputs:string[] =[];
     for (var i=0; i < files.length; i++) {
       var file = files[i];
       ffmpeg.FS('writeFile', file.name, await fetchFile(file));
-      commandstr += `-i ${file.name} `
       inputs.push('-i');
       inputs.push(file.name);
     }
@@ -76,31 +111,18 @@ function App() {
     inputs.push(`amix=inputs=${files.length}`);
     inputs.push(outputFileName);
     await ffmpeg.run(...inputs);
-    //await ffmpeg.run(commandstr, '-filter_complex', `amix=inputs=${files.length}`, outputFileName);
-    
-    // const inputPaths = [];
-    // for (var i=0; i < files.length; i++) {
-    //   var file = files[i];
-    //   ffmpeg.FS('writeFile', file.name, await fetchFile(file));
-    //   inputPaths.push(`file ${file.name}`);
-    // }
-    // var str = inputPaths.join('\n');
-    // console.log(str);
-    // var data = new TextEncoder().encode(str);
-    // ffmpeg.FS('writeFile', outputListTextName, data);
-
-    // await ffmpeg.run('-f', outputListTextName, '-filter_complex', `amix=inputs=${files.length}`, outputFileName);
-  
   }
 
   const onCombineClick = async () => {
+    setShowProgress(true);
     await combineFilesIntoOneMp3();
     const data = ffmpeg.FS('readFile', outputFileName);
     setAudioSrc(URL.createObjectURL(new Blob([data.buffer], { type: 'audio/mp3' })));
+    setShowProgress(false);
   }
 
   const onCombineIntoVideoClick = async () => {
-
+    setShowProgress(true);
     await combineFilesIntoOneMp3();
 
     var outputVideoFileName = 'outputVideo.mp4';
@@ -112,6 +134,7 @@ function App() {
     
     const data = ffmpeg.FS('readFile', 'outputVideo.mp4');
     setVideoSrc(URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' })));
+    setShowProgress(false);
   }
 
   const onSelectImageClick = () => {
@@ -133,25 +156,26 @@ function App() {
 
 
   return (
-    <div className="App">
-      <h2>{message}</h2>
-      <p/>
+    <StyledApp>
+
       <br/>
 
       <input multiple type='file' id='file' ref={fileRef} style={{display: 'none'}} onChange={onChangeFile}/>
-      <button onClick={onAddFileClick}>Add File(s)</button>
+      <button disabled={showProgress} onClick={onAddFileClick}>Add File(s)</button>
 
-      {files.length > 0 && <p>Files Loaded</p>}
-      {files.length > 0 && files.map(file => 
-        <div key={file.name}>
-          <p>{file.name}</p>
-          <audio src={URL.createObjectURL(file)} controls/>
-        </div>
-      )}
+      <FileList
+        files={files}
+        onRemoveFile={(file) => {
+          var newFiles = files.filter((f) => f.name !== file.name);
+          setFiles(newFiles);
+        }}
+      />
 
       <br/>
 
-      <button onClick={onCombineClick}>Combine into one mp3</button>
+
+      <button disabled={files.length < 2 || showProgress} onClick={onCombineClick}>Combine into one mp3</button>
+      
       <br/>
       {audioSrc && 
         <div>
@@ -163,19 +187,38 @@ function App() {
 
       <br/>
       <input accept='image/*' type='file' id='image' ref={imageRef} style={{display: 'none'}} onChange={onImageChange}/>
-      <button onClick={onSelectImageClick}>Select Image</button>
+      <button disabled={showProgress} onClick={onSelectImageClick}>Select Image</button>
       <br/>
-      {image && <img src={image} width='400'  />}
+      {image && <img alt='selectedImage' src={image} width='400'  />}
 
       <br/>
-      <button onClick={onCombineIntoVideoClick}>Combine into a video</button>
+      <button disabled={files.length < 2 || showProgress || image === ''} onClick={onCombineIntoVideoClick}>Combine into a video</button>
       {videoSrc &&
         <div>
-          <video src={videoSrc} controls width='400'></video>
+          <video src={videoSrc} controls width='400'>
+            <a href={videoSrc} download>Download video</a>
+          </video>
         </div>
       }
 
-    </div>
+      <br />
+
+      {showProgress && progress &&
+        <progress value={progress.ratio} max={1}/>
+      }
+
+      <p>Ffmpeg output below</p>
+      <StyledCode>
+        {logs.map((l, index) => {
+          var message = `${l.date.toLocaleTimeString()} ${l.type}: ${l.message}`;
+          var key=index;
+          return (
+            <code key={key}>{message}<br/></code>
+          )
+        })}
+      </StyledCode>
+
+    </StyledApp>
   );
 }
 
