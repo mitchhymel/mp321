@@ -113,6 +113,7 @@ function App() {
     inputs.push(`amix=inputs=${files.length}`);
     inputs.push(outputFileName);
     await ffmpeg.run(...inputs);
+    return outputFileName;
   }
 
   const onCombineClick = async () => {
@@ -137,17 +138,40 @@ function App() {
 
   const onCombineIntoVideoClick = async () => {
     setShowProgress(true);
-    await combineFilesIntoOneMp3();
 
-    var outputVideoFileName = 'outputVideo.mp4';
-    var imageFileName = 'tmp.png';
-    ffmpeg.FS('writeFile', imageFileName, await fetchFile(image));
+    if (!ffmpeg.isLoaded()) {
+      await ffmpeg.load();
+    }
 
-    var inputs: string[] = ['-r', '1', '-loop', '1', '-y', '-i', imageFileName, '-i', outputFileName, '-c:a', 'copy', '-r', '1', '-vcodec', 'libx264', '-shortest', outputVideoFileName];
-    await ffmpeg.run(...inputs);
+    var inputFileName: string = outputFileName;
+    if (files.length > 1) {
+      inputFileName = await combineFilesIntoOneMp3();
+    }
+    else {
+      var file = files[0];
+      inputFileName = file.name;
+      ffmpeg.FS('writeFile',file.name, await fetchFile(file));
+    }
+
     
-    const data = ffmpeg.FS('readFile', 'outputVideo.mp4');
-    setVideoSrc(URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' })));
+    try {
+      var outputVideoFileName = 'outputVideo.mp4';
+      var imageFileName = 'tmp.png';
+      ffmpeg.FS('writeFile', imageFileName, await fetchFile(image));
+  
+      var inputs: string[] = ['-r', '1', '-loop', '1', '-y', '-i', imageFileName, '-i', inputFileName, '-c:a', 'copy', '-r', '1', '-vcodec', 'libx264', '-shortest', outputVideoFileName];
+      await ffmpeg.run(...inputs);
+      
+      const data = ffmpeg.FS('readFile', outputVideoFileName);
+      setVideoSrc(URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' })));  
+    } catch (exception) {
+      logs.unshift({
+        date: new Date(),
+        message: (exception as Error).message,
+        type: 'exception'
+      });
+      setLogs(logs);
+    }
     setShowProgress(false);
   }
 
@@ -201,7 +225,7 @@ function App() {
       {image && <img alt='selectedImage' src={image} width='400'  />}
 
       <br/>
-      <button disabled={files.length < 2 || showProgress || image === ''} onClick={onCombineIntoVideoClick}>Combine into a video</button>
+      <button disabled={files.length == 0 || showProgress || image === ''} onClick={onCombineIntoVideoClick}>Combine all tracks into a video with static image</button>
       {videoSrc &&
         <div>
           <video src={videoSrc} controls width='400'>
