@@ -1,6 +1,6 @@
 # mp321
 
-Demo:  [mitchhymel.github.io/mp321](mitchhymel.github.io/mp321) 
+Demo:  [mitchhymel.github.io/mp321](https://mitchhymel.github.io/mp321/) 
 
 This is a quick and hackily thrown together site to provide some ffmpeg functionality via a web app.
 
